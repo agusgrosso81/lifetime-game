@@ -9,7 +9,11 @@ const URL_AUTH = 'https://accounts.spotify.com/authorize';
 const URL_TOKEN = 'https://accounts.spotify.com/api/token';
 const SCOPES = 'user-read-recently-played user-top-read user-read-currently-playing';
 
-const redirectUri = () => location.origin + location.pathname;
+// Spotify compara la dirección carácter por carácter, así que tiene que salir SIEMPRE
+// igual. Se le saca el 'index.html' final: según cómo se haya llegado a la app, el
+// navegador puede mostrar la carpeta o el archivo, y para Spotify serían dos direcciones
+// distintas (una registrada y la otra no).
+const redirectUri = () => location.origin + location.pathname.replace(/index\.html$/i, '');
 
 // Al volver del login de Spotify la URL no trae hash, así que la app abre el
 // dashboard. Si detectamos el ?code con nuestro state, llevamos al usuario acá
@@ -329,19 +333,55 @@ function pintarGuia(cont) {
 function pintarConectar(cont, clientId) {
   let guiaVisible = false;
   const zonaGuia = ui.el('div');
+  const uri = redirectUri();
+
+  // Spotify solo acepta direcciones cargadas de antemano, y cada dispositivo abre la app
+  // en una dirección distinta (la PC en 127.0.0.1, el celular en la de GitHub Pages).
+  // Mostrarla acá evita el error "redirect_uri: Not matching information", que aparece
+  // en una página en blanco de Spotify y no explica nada.
+  const cajaUri = ui.el('div', { class: 'fila', style: { margin: '8px 0' } },
+    ui.el('code', {
+      style: {
+        background: 'var(--fondo-3)', border: '1px solid var(--borde)', borderRadius: '8px',
+        padding: '7px 10px', fontSize: '.82rem', wordBreak: 'break-all', flex: '1', minWidth: '120px',
+      },
+    }, uri),
+    ui.el('button', { class: 'btn btn-chico', onClick: () => copiarTexto(uri) }, ui.icon('copiar'), 'Copiar'));
+
   cont.append(
     ui.el('div', { class: 'tarjeta' },
       ui.el('h3', {}, ui.icon('spotify'), 'Conectar con Spotify'),
       ui.el('p', { class: 'texto-suave' },
         'El Client ID ya está configurado. Falta autorizar tu cuenta: te mando a Spotify, aceptás y volvés acá.'),
-      ui.el('div', { class: 'fila' },
+      ui.el('div', { class: 'tarjeta', style: { background: 'var(--fondo-3)' } },
+        ui.el('p', { class: 'texto-chico sin-margen' },
+          ui.el('strong', {}, 'Antes de tocar conectar: '),
+          'esta es la dirección de ', ui.el('strong', {}, 'este dispositivo'),
+          '. Tiene que estar cargada en tu app de Spotify, en "Redirect URIs":'),
+        cajaUri,
+        ui.el('p', { class: 'texto-chico texto-suave sin-margen' },
+          'Cada dirección va por separado: la de la computadora no sirve para el celular. ' +
+          'En la misma app de Spotify podés tener las dos cargadas.'),
+        ui.el('a', {
+          class: 'btn btn-chico mt', href: 'https://developer.spotify.com/dashboard',
+          target: '_blank', rel: 'noopener',
+        }, 'Abrir el panel de Spotify')),
+      ui.el('div', { class: 'fila mt' },
         ui.el('button', { class: 'btn btn-primario', onClick: () => iniciarLogin(clientId) },
           ui.icon('spotify'), 'Conectar con Spotify'),
         ui.el('button', { class: 'btn btn-sec', onClick: () => {
           guiaVisible = !guiaVisible;
           zonaGuia.innerHTML = '';
           if (guiaVisible) zonaGuia.append(tarjetaGuia());
-        } }, ui.icon('info'), 'Ver la guía'))),
+        } }, ui.icon('info'), 'Ver la guía')),
+      ui.el('details', { class: 'mt' },
+        ui.el('summary', { class: 'texto-chico texto-suave', style: { cursor: 'pointer' } },
+          'Me apareció una página en blanco que dice "redirect_uri: Not matching information"'),
+        ui.el('p', { class: 'texto-chico texto-suave' },
+          'Ese error significa que la dirección de arriba no está cargada en Spotify, o que no ' +
+          'quedó escrita idéntica. Copiala con el botón, pegala en "Redirect URIs" de tu app en ' +
+          'el panel de Spotify, tocá "Add" y después "Save". Fijate que no le falte ni le sobre ' +
+          'la barra del final. Esperá un minuto y volvé a probar.'))),
     zonaGuia);
 }
 

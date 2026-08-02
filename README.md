@@ -112,7 +112,18 @@ Pasos:
 2. **Create app**. Nombre y descripción, lo que quieras.
 3. En **Redirect URIs** pegá la dirección exacta desde donde vas a usar la app.
    La pestaña Música te la muestra con un botón para copiar, y te avisa si no sirve.
-   Podés agregar las dos (la de la compu y la del celular) en la misma app.
+
+   **Cada dispositivo abre la app en una dirección distinta y cada una va cargada por
+   separado.** En la misma app de Spotify podés (y conviene) tener las dos:
+
+   | Dónde | Dirección a registrar |
+   |---|---|
+   | Computadora | `http://127.0.0.1:8765/` |
+   | Celular (GitHub Pages) | `https://agusgrosso81.github.io/lifetime-game/` |
+
+   Si falta la del celular, Spotify muestra una página en blanco que dice
+   *"redirect_uri: Not matching information"*. No es un error de la app: es Spotify
+   avisando que esa dirección no está en su lista.
 4. Marcá **Web API** y guardá.
 5. Copiá el **Client ID** y pegalo en **Ajustes → Spotify Client ID**.
 6. Volvé a Música y tocá conectar.

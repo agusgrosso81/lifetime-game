@@ -1,5 +1,11 @@
-# Backups y basura del sistema
+# Backups y archivos que exporta la app
+lifetime-game-backup-*.json
+notas-lifetime-game-*.md
 organizador-backup-*.json
+*.ics
+*.gpx
+
+# Basura del sistema
 Thumbs.db
 desktop.ini
 .DS_Store

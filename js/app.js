@@ -11,10 +11,12 @@ import economia from './modules/economia.js';
 import ubicacion from './modules/ubicacion.js';
 import musica from './modules/musica.js';
 import google from './modules/google.js';
+import cuenta, { necesitaBienvenida, pantallaBienvenida } from './cuenta.js';
 import ajustes from './modules/ajustes.js';
+import { sync } from './sync.js';
 
 // Cada módulo: { id, nombre, icono, render(contenedor) }  — render puede ser async.
-const MODULOS = [dashboard, estudio, tiempo, dieta, notas, economia, ubicacion, musica, google, ajustes];
+const MODULOS = [dashboard, estudio, tiempo, dieta, notas, economia, ubicacion, musica, google, cuenta, ajustes];
 
 const nav = document.getElementById('nav');
 const contenido = document.getElementById('contenido');
@@ -150,11 +152,29 @@ async function registrarSW() {
 
 // ---------- Init ----------
 (async function init() {
+  // Esperar a que la base esté abierta y el usuario cargado: si no, el primer módulo
+  // leería con el usuario equivocado y mostraría la pantalla vacía de otra cuenta.
+  await db.listo;
   await aplicarTema();
-  pintarNav();
   registrarSW();
+
+  // Primer arranque: elegir entre usar el aparato solo o conectarse a un servidor.
+  if (await necesitaBienvenida()) {
+    nav.classList.add('oculto');
+    await pantallaBienvenida(contenido, async (destino) => {
+      nav.classList.remove('oculto');
+      contenido.innerHTML = '';
+      pintarNav();
+      await navegar(destino || 'dashboard');
+      sync.iniciar();
+    });
+    return;
+  }
+
+  pintarNav();
   const hash = location.hash.replace('#', '');
   await navegar(hash || 'dashboard');
+  sync.iniciar();
   window.addEventListener('hashchange', () => {
     const id = location.hash.replace('#', '');
     if (id && id !== moduloActivo) navegar(id);

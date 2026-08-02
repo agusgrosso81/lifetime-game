@@ -47,6 +47,10 @@ const ICONOS = {
   copiar: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M5.5 15.5h-1a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6h.01"/>',
   spotify: '<circle cx="12" cy="12" r="9"/><path d="M6.8 9.5c3.6-1 7.5-.6 10.5 1.1M7.5 12.6c3-.8 6.1-.4 8.6 1M8.2 15.6c2.3-.6 4.6-.3 6.6.8"/>',
+  usuario: '<circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>',
+  sincronizar: '<path d="M20.5 12a8.5 8.5 0 0 1-14.6 5.9M3.5 12a8.5 8.5 0 0 1 14.6-5.9"/><path d="M18.5 2.5V7H14M5.5 21.5V17H10"/>',
+  candado: '<rect x="4.5" y="10" width="15" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14.5v2.5"/>',
+  wifi_no: '<path d="M2.5 8.5a17 17 0 0 1 6-3.6M15.5 5a17 17 0 0 1 6 3.5M5.8 12.2a12 12 0 0 1 3.4-2M14.9 10.3a12 12 0 0 1 3.3 1.9M9.2 15.7a6.5 6.5 0 0 1 5.6 0"/><path d="M12 19.5h.01M3 3l18 18"/>',
 };
 
 function el(tag, attrs = {}, ...hijos) {

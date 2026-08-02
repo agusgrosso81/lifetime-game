@@ -5,8 +5,28 @@ Funciona en la compu y en el celular (POCO X7 Pro), sin depender de ninguna app 
 
 Repositorio: https://github.com/agusgrosso81/lifetime-game
 
-Todos los datos se guardan **en tu dispositivo** (IndexedDB del navegador). Nada viaja a
-ningún servidor salvo que vos actives las integraciones de Spotify o Google.
+Funciona de dos maneras, y se elige la primera vez que se abre:
+
+- **Solo en este dispositivo.** Todo se guarda en el aparato (IndexedDB) y no sale nunca
+  de ahí. Es como venía siendo hasta ahora.
+- **Con servidor.** Tus datos quedan en todos tus dispositivos y varias personas pueden
+  usar el mismo servidor, cada una con lo suyo. La app sigue andando sin conexión y
+  sincroniza cuando vuelve a alcanzar el servidor.
+
+En los dos casos anda sin internet. Nada viaja a servicios de terceros salvo que actives
+las integraciones de Spotify o Google.
+
+## Las tres piezas
+
+| Pieza | Qué es | Dónde |
+|---|---|---|
+| La app | JavaScript vanilla, sin build | raíz del repo |
+| El servidor | Node + SQLite, sin dependencias | [`server/`](server/) |
+| El APK | La misma app empaquetada con Capacitor | se compila en GitHub |
+
+Documentación: [arquitectura](docs/arquitectura.md) (modelo de datos, sincronización y
+API), [servidor](SERVIDOR.md) (cómo montarlo en la notebook) y [APK](docs/apk.md)
+(cómo compilarlo e instalarlo).
 
 ---
 
@@ -137,11 +157,16 @@ index.html            arranque
 manifest.webmanifest  datos de instalación (nombre, ícono, colores)
 sw.js                 service worker: guarda la app para usarla sin internet
 css/app.css           estilos y temas (variables CSS)
-js/db.js              base de datos (IndexedDB): todos los módulos guardan acá
+js/db.js              datos (IndexedDB): multiusuario, con marcas para sincronizar
+js/sync.js            motor de sincronización con el servidor
+js/cuenta.js          bienvenida, login, estado de sync y panel de admin
 js/ui.js              piezas de interfaz: modales, gráficos, fechas, grabador de audio
 js/app.js             navegación, temas, alarmas
 js/modules/*.js       un archivo por sección
 vendor/leaflet/       mapas (copia local, funciona sin internet salvo los mosaicos)
+server/               servidor Node + SQLite (sin dependencias externas)
+scripts/              preparación del APK
+docs/                 arquitectura y guías
 ```
 
 Cada módulo de `js/modules/` es independiente y exporta
@@ -153,7 +178,13 @@ Detalles a tener en cuenta al modificarla:
 - Si agregás o cambiás archivos, sumalos a la lista `ARCHIVOS` de `sw.js` y subile
   el número a `CACHE` (`lifetime-game-v3` → `v4`) para que se actualice en los
   dispositivos que ya la tengan instalada.
-- Si agregás un store nuevo en `db.js`, subí también `DB_VERSION`.
+- Si agregás un store nuevo en `db.js`, subí también `DB_VERSION` y escribí la migración
+  en `onupgradeneeded`. El servidor no hay que tocarlo: guarda cualquier store sin
+  conocer su forma.
+- Los módulos de `js/modules/` no saben nada de usuarios ni de sincronización: siguen
+  llamando a `db.put`/`db.getAll` como siempre y `db.js` se encarga del resto.
+- `db.del` es borrado **lógico** (marca `borrado: 1`). Para vaciar de verdad, sin
+  propagar el borrado al servidor, está `db.vaciarDeVerdad`.
 - Para dibujar en canvas usá `ui.alPintar()`, no `requestAnimationFrame`: los
   navegadores no lo disparan con la página oculta y los gráficos quedarían en blanco.
 - Las fechas se sacan siempre con `ui.hoyISO()` (hora local). Con `toISOString()` de

@@ -1,7 +1,7 @@
 // sw.js — Service worker: cachea el shell de la app para funcionar 100% offline.
 // Estrategia: cache-first para archivos propios, network-first para el resto
 // (tiles de mapa y APIs siempre van a la red; si no hay red, fallan con gracia).
-const CACHE = 'lifetime-game-v3';
+const CACHE = 'lifetime-game-v4';
 const ARCHIVOS = [
   './',
   './index.html',
@@ -10,6 +10,8 @@ const ARCHIVOS = [
   './js/app.js',
   './js/db.js',
   './js/ui.js',
+  './js/sync.js',
+  './js/cuenta.js',
   './js/modules/dashboard.js',
   './js/modules/estudio.js',
   './js/modules/tiempo.js',
@@ -44,6 +46,10 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== location.origin || e.request.method !== 'GET') return;
+  // La API nunca se cachea. Cuando la app se sirve desde el propio servidor, /api/estado,
+  // /api/blob y /api/blobs son GET del mismo origen: sin esta línea el service worker
+  // devolvería respuestas viejas y la sincronización trabajaría con datos vencidos.
+  if (url.pathname.startsWith('/api/') || url.pathname.includes('/api/')) return;
   // Archivos propios: "stale-while-revalidate".
   // Responde YA desde el cache (rápido y funciona sin internet) y, en paralelo,
   // baja la versión nueva para el próximo arranque. Sin esto, una app instalada

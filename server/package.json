@@ -1,0 +1,15 @@
+{
+  "name": "lifetime-game-servidor",
+  "version": "1.0.0",
+  "description": "Servidor multiusuario de Lifetime Game. Sin dependencias: usa solo modulos nativos de Node.",
+  "type": "module",
+  "private": true,
+  "main": "servidor.js",
+  "scripts": {
+    "start": "node servidor.js",
+    "backup": "node servidor.js --backup"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

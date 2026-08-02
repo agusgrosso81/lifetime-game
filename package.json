@@ -1,0 +1,18 @@
+{
+  "name": "lifetime-game",
+  "version": "1.0.0",
+  "description": "Lifetime Game: estudio, tiempo, dieta, notas, plata, mapas y musica.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "servidor": "node server/servidor.js",
+    "apk:www": "node scripts/preparar-www.mjs",
+    "apk:permisos": "node scripts/permisos-android.mjs",
+    "apk:sync": "npm run apk:www && npx cap sync android && npm run apk:permisos"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0"
+  }
+}

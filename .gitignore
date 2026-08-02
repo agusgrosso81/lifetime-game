@@ -5,6 +5,18 @@ organizador-backup-*.json
 *.ics
 *.gpx
 
+# Datos del servidor: base de datos, audios e imagenes de los usuarios.
+# NUNCA se suben a GitHub.
+server/datos/
+
+# Compilacion del APK (se genera sola, no va al repo)
+node_modules/
+www/
+android/
+.gradle/
+*.apk
+*.aab
+
 # Basura del sistema
 Thumbs.db
 desktop.ini

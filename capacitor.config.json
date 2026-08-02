@@ -1,0 +1,11 @@
+{
+  "appId": "com.agusgrosso.lifetimegame",
+  "appName": "Lifetime Game",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

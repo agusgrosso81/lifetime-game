@@ -1,0 +1,74 @@
+name: Compilar APK
+
+# Se dispara al subir cambios a main, o a mano desde la pestaña Actions.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'server/**'
+      - '**.md'
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bajar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Preparar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Preparar el SDK de Android
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Armar la carpeta web
+        run: node scripts/preparar-www.mjs
+
+      # La carpeta android/ no está en el repositorio: la genera Capacitor acá.
+      # El "if" evita que falle si alguna vez quedara cacheada.
+      - name: Crear el proyecto Android
+        run: |
+          if [ ! -d android ]; then npx cap add android; fi
+
+      - name: Sincronizar el contenido web
+        run: npx cap sync android
+
+      - name: Agregar permisos al manifiesto
+        run: node scripts/permisos-android.mjs
+
+      - name: Cachear Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Compilar el APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Guardar el APK para descargar
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifetime-game-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 90
+          if-no-files-found: error

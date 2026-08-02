@@ -105,7 +105,9 @@ async function render(cont) {
     ui.el('button', { class: 'btn btn-peligro mt', onClick: async () => {
       if (!(await ui.confirmar('Esto borra TODOS los datos de la app en este dispositivo. ¿Seguro?', 'Borrar todo'))) return;
       if (!(await ui.confirmar('Última confirmación: se pierde todo lo no exportado.', 'Sí, borrar'))) return;
-      for (const s of db.STORES) await db.clear(s);
+      // Vaciado real, no borrado lógico: esto limpia el aparato entero. Si dejara lápidas
+      // se sincronizarían y borrarían también lo que hay en el servidor.
+      for (const s of db.STORES) await db.vaciarDeVerdad(s);
       ui.toast('Datos borrados');
       setTimeout(() => location.reload(), 800);
     } }, ui.icon('basura'), 'Borrar todos los datos'));

@@ -13,7 +13,7 @@ ningún servidor salvo que vos actives las integraciones de Spotify o Google.
 ## Cómo abrirla en la compu
 
 ```bash
-python -m http.server 8765 --directory C:\Users\agusi\lifetime-game
+python -m http.server 8765 --directory "C:\Users\agusi\OneDrive\Documentos\GitHub\lifetime game"
 ```
 
 Y entrá a **http://127.0.0.1:8765**
@@ -36,18 +36,23 @@ Android exige **HTTPS** para permitir GPS, micrófono, notificaciones e instalac
 Por eso `http://192.168.x.x:8765` desde el celu **no sirve**: la app abre, pero sin
 esas funciones y sin poder instalarse. La solución gratis es GitHub Pages.
 
-### Con GitHub Desktop
+El repo local está en `C:\Users\agusi\OneDrive\Documentos\GitHub\lifetime game`
+y ya está subido a GitHub. Para que quede accesible desde el celular faltan dos
+cosas que se hacen una sola vez en github.com:
 
-1. **File → Add local repository** y elegí la carpeta `C:\Users\agusi\lifetime-game`.
-2. Si hay cambios sin guardar, escribí un resumen abajo a la izquierda y tocá
-   **Commit to main**.
-3. Tocá **Publish repository** (o **Push origin** si ya está publicado).
-   Dejalo público: GitHub Pages gratis lo necesita.
-4. En github.com, entrá al repo → **Settings → Pages → Source: Deploy from a branch →
-   Branch: main / (root) → Save**.
-5. A los ~2 minutos queda publicado en:
-   **https://agusgrosso81.github.io/lifetime-game/**
-6. Abrí esa dirección en Chrome del celular → menú (⋮) → **Agregar a pantalla de inicio**.
+1. **Hacer el repo público** (GitHub Pages gratis no funciona en repos privados):
+   entrá al repo → **Settings** → abajo de todo, **Danger Zone** →
+   **Change repository visibility** → **Change to public**.
+2. **Activar Pages**: **Settings → Pages → Source: Deploy from a branch →
+   Branch: main / carpeta `/ (root)` → Save**.
+
+A los ~2 minutos queda publicado en:
+**https://agusgrosso81.github.io/lifetime-game/**
+
+Abrí esa dirección en Chrome del celular → menú (⋮) → **Agregar a pantalla de inicio**.
+
+Para subir cambios más adelante, en GitHub Desktop: escribí un resumen abajo a la
+izquierda, **Commit to main** y después **Push origin**.
 
 Queda como una app más: ícono propio, pantalla completa, sin barra del navegador y
 funcionando sin internet.

@@ -1,0 +1,5 @@
+# Backups y basura del sistema
+organizador-backup-*.json
+Thumbs.db
+desktop.ini
+.DS_Store

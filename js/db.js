@@ -9,6 +9,8 @@
 //   await db.clear('materias')
 //   await db.setSetting('clave', valor) / db.getSetting('clave', porDefecto)
 
+// El nombre interno queda como 'organizador' aunque la app pasó a llamarse Lifetime Game:
+// cambiarlo crearía una base vacía y los datos ya cargados quedarían inaccesibles.
 const DB_NAME = 'organizador';
 const DB_VERSION = 1;
 

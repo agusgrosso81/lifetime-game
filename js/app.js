@@ -132,7 +132,7 @@ async function registrarSW() {
         if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
           ui.modal({
             titulo: 'Hay una versión nueva',
-            cuerpo: ui.el('p', {}, 'Se actualizó el Organizador. ¿Querés recargar para usar la versión nueva?'),
+            cuerpo: ui.el('p', {}, 'Se actualizó Lifetime Game. ¿Querés recargar para usar la versión nueva?'),
             botones: [
               { texto: 'Después', clase: 'btn-sec' },
               { texto: 'Recargar', clase: 'btn-primario', onClick: (c) => { nuevo.postMessage('actualizar'); c(); } },

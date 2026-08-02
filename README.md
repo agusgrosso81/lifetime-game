@@ -1,7 +1,9 @@
-# Organizador
+# Lifetime Game
 
-App personal de estudio, tiempo, dieta, notas, plata, mapas y música.
+El juego que dura toda la vida: estudio, tiempo, dieta, notas, plata, mapas y música.
 Funciona en la compu y en el celular (POCO X7 Pro), sin depender de ninguna app externa.
+
+Repositorio: https://github.com/agusgrosso81/lifetime-game
 
 Todos los datos se guardan **en tu dispositivo** (IndexedDB del navegador). Nada viaja a
 ningún servidor salvo que vos actives las integraciones de Spotify o Google.
@@ -11,42 +13,46 @@ ningún servidor salvo que vos actives las integraciones de Spotify o Google.
 ## Cómo abrirla en la compu
 
 ```bash
-python -m http.server 8765 --directory C:\Users\agusi\organizador
+python -m http.server 8765 --directory C:\Users\agusi\lifetime-game
 ```
 
-Y entrá a http://localhost:8765
+Y entrá a **http://127.0.0.1:8765**
 
-> Tiene que ser por `http://localhost`, no abriendo el `index.html` con doble clic:
-> el navegador bloquea la base de datos y el modo offline en archivos locales.
+> Usá siempre `127.0.0.1`, no `localhost`. Son dos direcciones distintas para el navegador:
+> cada una guarda **su propia base de datos**, así que lo que cargues en una no aparece en
+> la otra. Y Spotify no acepta `localhost` (ver más abajo).
+>
+> Si ya venías cargando datos en `localhost:8765`, pasalos así: abrí `http://localhost:8765`,
+> **Ajustes → Exportar datos**, después abrí `http://127.0.0.1:8765` y **Ajustes → Importar datos**.
+
+> Tampoco sirve abrir el `index.html` con doble clic: el navegador bloquea la base de datos
+> y el modo offline en archivos locales.
 
 ---
 
-## Cómo instalarla en el POCO X7 Pro
+## Cómo publicarla e instalarla en el celular
 
 Android exige **HTTPS** para permitir GPS, micrófono, notificaciones e instalación.
 Por eso `http://192.168.x.x:8765` desde el celu **no sirve**: la app abre, pero sin
-esas funciones y sin poder instalarse.
+esas funciones y sin poder instalarse. La solución gratis es GitHub Pages.
 
-La forma gratis y definitiva es GitHub Pages:
+### Con GitHub Desktop
 
-1. Creá una cuenta en github.com (si no tenés).
-2. Creá un repositorio nuevo, por ejemplo `organizador`. Podés dejarlo público.
-3. Desde esta carpeta, subí el proyecto:
-
-```bash
-git remote add origin https://github.com/TU-USUARIO/organizador.git
-git branch -M main
-git push -u origin main
-```
-
-4. En el repo: **Settings → Pages → Source: Deploy from a branch → Branch: main / (root) → Save**.
-5. A los ~2 minutos queda publicado en `https://TU-USUARIO.github.io/organizador/`.
+1. **File → Add local repository** y elegí la carpeta `C:\Users\agusi\lifetime-game`.
+2. Si hay cambios sin guardar, escribí un resumen abajo a la izquierda y tocá
+   **Commit to main**.
+3. Tocá **Publish repository** (o **Push origin** si ya está publicado).
+   Dejalo público: GitHub Pages gratis lo necesita.
+4. En github.com, entrá al repo → **Settings → Pages → Source: Deploy from a branch →
+   Branch: main / (root) → Save**.
+5. A los ~2 minutos queda publicado en:
+   **https://agusgrosso81.github.io/lifetime-game/**
 6. Abrí esa dirección en Chrome del celular → menú (⋮) → **Agregar a pantalla de inicio**.
 
 Queda como una app más: ícono propio, pantalla completa, sin barra del navegador y
 funcionando sin internet.
 
-Para actualizarla más adelante: `git add -A && git commit -m "cambios" && git push`.
+Para actualizarla: hacé los cambios, **Commit to main** y **Push origin** en GitHub Desktop.
 La app avisa sola cuando hay versión nueva y te ofrece recargar.
 
 ---
@@ -63,17 +69,25 @@ Aceptalos cuando aparezcan, cada uno habilita una función:
 
 Las alarmas suenan mientras la app esté abierta o recién usada. Para recordatorios
 con el celular guardado, exportá los exámenes a Google Calendar desde la pestaña
-**Google → Descargar organizador.ics** y abrí el archivo en el celu.
+**Google → Descargar lifetime-game.ics** y abrí el archivo en el celu.
 
 ---
 
 ## Conectar Spotify (opcional)
 
+**Spotify no acepta `localhost`**: lo rechaza al guardarlo. Solo acepta direcciones
+HTTPS o de loopback por IP (`http://127.0.0.1:PUERTO`). Por eso:
+
+- En el **celular**, con la app publicada en GitHub Pages (HTTPS), anda directo.
+- En la **compu**, abrí la app en `http://127.0.0.1:8765` y registrá esa dirección.
+
+Pasos:
+
 1. Entrá a https://developer.spotify.com/dashboard e iniciá sesión con tu cuenta.
 2. **Create app**. Nombre y descripción, lo que quieras.
-3. En **Redirect URI** pegá la dirección exacta de tu app
-   (por ejemplo `https://TU-USUARIO.github.io/organizador/`).
-   La pestaña Música te la muestra con un botón para copiar.
+3. En **Redirect URIs** pegá la dirección exacta desde donde vas a usar la app.
+   La pestaña Música te la muestra con un botón para copiar, y te avisa si no sirve.
+   Podés agregar las dos (la de la compu y la del celular) en la misma app.
 4. Marcá **Web API** y guardá.
 5. Copiá el **Client ID** y pegalo en **Ajustes → Spotify Client ID**.
 6. Volvé a Música y tocá conectar.
@@ -89,7 +103,8 @@ Sirve para backup en Drive, exportar a Sheets y preparar archivos para NotebookL
 3. **Pantalla de consentimiento OAuth**: tipo External, y agregá tu Gmail como usuario de prueba.
 4. **Credenciales → Crear credenciales → ID de cliente de OAuth → Aplicación web**.
 5. En **Orígenes de JavaScript autorizados** poné el origen de tu app
-   (por ejemplo `https://TU-USUARIO.github.io`). La pestaña Google te lo muestra.
+   (`https://agusgrosso81.github.io` y/o `http://127.0.0.1:8765`).
+   La pestaña Google te lo muestra.
 6. Copiá el **Client ID** y pegalo en **Ajustes → Google OAuth Client ID**.
 
 El calendario (.ics) y el resumen por Gmail funcionan sin configurar nada de esto.
@@ -128,6 +143,17 @@ Cada módulo de `js/modules/` es independiente y exporta
 `{ id, nombre, icono, render }`. Para agregar una sección nueva: creá el archivo,
 importalo en `js/app.js` y sumalo al array `MODULOS`. Aparece sola en el menú.
 
-Si agregás o cambiás archivos, sumalos a la lista `ARCHIVOS` de `sw.js` y subile
-el número a `CACHE` (`organizador-v2` → `organizador-v3`) para que se actualice
-en los dispositivos que ya la tengan instalada.
+Detalles a tener en cuenta al modificarla:
+
+- Si agregás o cambiás archivos, sumalos a la lista `ARCHIVOS` de `sw.js` y subile
+  el número a `CACHE` (`lifetime-game-v3` → `v4`) para que se actualice en los
+  dispositivos que ya la tengan instalada.
+- Si agregás un store nuevo en `db.js`, subí también `DB_VERSION`.
+- Para dibujar en canvas usá `ui.alPintar()`, no `requestAnimationFrame`: los
+  navegadores no lo disparan con la página oculta y los gráficos quedarían en blanco.
+- Las fechas se sacan siempre con `ui.hoyISO()` (hora local). Con `toISOString()` de
+  noche el día UTC ya cambió y todos los "hoy" saldrían mal.
+- `ui.confirmar` resuelve la promesa en un único lugar (`alCerrar`): si cada botón
+  resolviera por su cuenta, el cierre ganaría de mano y todos los borrados fallarían.
+- El nombre interno de la base sigue siendo `organizador` a propósito: cambiarlo
+  crearía una base vacía y los datos ya cargados quedarían inaccesibles.

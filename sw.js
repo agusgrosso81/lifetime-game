@@ -1,7 +1,7 @@
 // sw.js — Service worker: cachea el shell de la app para funcionar 100% offline.
 // Estrategia: cache-first para archivos propios, network-first para el resto
 // (tiles de mapa y APIs siempre van a la red; si no hay red, fallan con gracia).
-const CACHE = 'organizador-v2';
+const CACHE = 'lifetime-game-v3';
 const ARCHIVOS = [
   './',
   './index.html',

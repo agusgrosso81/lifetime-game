@@ -96,7 +96,7 @@ function generarGPX(t) {
     `      <trkpt lat="${p.lat}" lon="${p.lng}"><time>${new Date(p.t).toISOString()}</time></trkpt>`
   ).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Organizador" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Lifetime Game" xmlns="http://www.topografix.com/GPX/1/1">
   <trk>
     <name>${escXML(t.nombre || 'Recorrido ' + t.fecha)}</name>
 ${t.notas ? '    <desc>' + escXML(t.notas) + '</desc>\n' : ''}    <trkseg>

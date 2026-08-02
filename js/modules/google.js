@@ -7,7 +7,7 @@ import { ui } from '../ui.js';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets';
 const K_TOKEN = 'google.token';
 const K_SHEET = 'google.sheetId';
-const CARPETA_DRIVE = 'Organizador';
+const CARPETA_DRIVE = 'Lifetime Game';
 
 // ---------- Google Identity Services ----------
 let _gisPromise = null;
@@ -252,7 +252,7 @@ async function exportarASheets() {
     const r = await gFetch('https://sheets.googleapis.com/v4/spreadsheets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ properties: { title: 'Organizador — datos' } }),
+      body: JSON.stringify({ properties: { title: 'Lifetime Game — datos' } }),
     });
     sheetId = (await r.json()).spreadsheetId;
     await db.setSetting(K_SHEET, sheetId);
@@ -326,16 +326,16 @@ async function generarICS() {
   const lineas = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Organizador//App personal//ES',
+    'PRODID:-//Lifetime Game//App personal//ES',
     'CALSCALE:GREGORIAN',
-    'X-WR-CALNAME:Organizador',
+    'X-WR-CALNAME:Lifetime Game',
   ];
   for (const e of pendientes) {
     const d = ui.desdeISO(e.fecha.slice(0, 10));
     d.setDate(d.getDate() + 1); // DTEND exclusivo para eventos de día completo
     lineas.push(
       'BEGIN:VEVENT',
-      `UID:examen-${e.id}@organizador`,
+      `UID:examen-${e.id}@lifetimegame`,
       `DTSTAMP:${stamp}`,
       `DTSTART;VALUE=DATE:${icsDia(e.fecha)}`,
       `DTEND;VALUE=DATE:${icsDia(ui.hoyISO(d))}`,
@@ -355,11 +355,11 @@ async function generarICS() {
     const fin = new Date(d.getTime() + 30 * 60000);
     lineas.push(
       'BEGIN:VEVENT',
-      `UID:alarma-${a.id}@organizador`,
+      `UID:alarma-${a.id}@lifetimegame`,
       `DTSTAMP:${stamp}`,
       `DTSTART:${icsUTC(d)}`,
       `DTEND:${icsUTC(fin)}`,
-      `SUMMARY:${escICS(a.mensaje || 'Alarma del Organizador')}`,
+      `SUMMARY:${escICS(a.mensaje || 'Alarma de Lifetime Game')}`,
       a.refTipo ? `DESCRIPTION:${escICS('Origen: ' + a.refTipo)}` : null,
       'BEGIN:VALARM',
       'ACTION:DISPLAY',
@@ -477,10 +477,10 @@ async function armarResumen() {
     }
   } else L.push('- Sin metas creadas.');
   L.push('');
-  L.push('Generado por tu Organizador.');
+  L.push('Generado por tu Lifetime Game.');
 
   return {
-    asunto: `Resumen semanal Organizador — ${ui.fmtFecha(hoy, true)}`,
+    asunto: `Resumen semanal Lifetime Game — ${ui.fmtFecha(hoy, true)}`,
     cuerpo: L.join('\n'),
   };
 }
@@ -524,7 +524,7 @@ function nodoGuia(origen) {
   return ui.el('div', {},
     ui.el('p', {}, 'Para conectar con Drive y Sheets necesitás un Client ID de Google (gratis, se hace una sola vez):'),
     ui.el('ol', { style: { paddingLeft: '20px', margin: '0 0 12px' } },
-      ui.el('li', {}, 'Entrá a ', enlace('https://console.cloud.google.com', 'console.cloud.google.com'), ' y creá un proyecto nuevo (nombre libre, ej. "Organizador").'),
+      ui.el('li', {}, 'Entrá a ', enlace('https://console.cloud.google.com', 'console.cloud.google.com'), ' y creá un proyecto nuevo (nombre libre, ej. "Lifetime Game").'),
       ui.el('li', {}, 'Andá a "APIs y servicios" → "Pantalla de consentimiento OAuth": elegí External, poné un nombre a la app y agregá tu Gmail como usuario de prueba (test user).'),
       ui.el('li', {}, 'En "APIs y servicios" → "Biblioteca", buscá y habilitá "Google Drive API" y "Google Sheets API".'),
       ui.el('li', {}, 'En "APIs y servicios" → "Credenciales" → "Crear credenciales" → "ID de cliente de OAuth" → tipo "Aplicación web".'),
@@ -664,7 +664,7 @@ async function render(cont) {
           botonAccion({ icono: 'subir', texto: 'Subir backup ahora', cargando: 'Subiendo…' }, async () => {
             const carpetaId = await buscarOCrearCarpeta(CARPETA_DRIVE);
             const data = await db.exportarJSON(false);
-            const nombre = `organizador-backup-${ui.hoyISO()}.json`;
+            const nombre = `lifetime-game-backup-${ui.hoyISO()}.json`;
             const subido = await subirADrive(nombre, JSON.stringify(data), 'application/json', carpetaId);
             resBackup.innerHTML = '';
             resBackup.append(ui.el('p', { class: 'texto-chico' },
@@ -692,7 +692,7 @@ async function render(cont) {
       cuerpo.append(ui.el('div', { class: 'tarjeta' },
         ui.el('div', { class: 'tarjeta-titulo' }, ui.el('h3', {}, ui.icon('grafico'), 'Exportar a Google Sheets')),
         ui.el('p', { class: 'texto-suave texto-chico' },
-          'Crea (o actualiza) la planilla "Organizador — datos" con una hoja por tema: transacciones, calificaciones, exámenes, sesiones de estudio, registro de tiempo, comidas, agua y trayectos. Ideal para hacer tus propios gráficos.'),
+          'Crea (o actualiza) la planilla "Lifetime Game — datos" con una hoja por tema: transacciones, calificaciones, exámenes, sesiones de estudio, registro de tiempo, comidas, agua y trayectos. Ideal para hacer tus propios gráficos.'),
         botonAccion({ icono: 'grafico', texto: 'Exportar ahora', cargando: 'Exportando…' }, async () => {
           const sheetId = await exportarASheets();
           resSheets.innerHTML = '';
@@ -723,10 +723,10 @@ async function render(cont) {
           const sel = selNota.input.value;
           let md, nombre;
           if (sel === 'todas') {
-            const partes = ['# Notas del Organizador', '', 'Exportado: ' + ui.fmtFecha(ui.hoyISO(), true), ''];
+            const partes = ['# Notas de Lifetime Game', '', 'Exportado: ' + ui.fmtFecha(ui.hoyISO(), true), ''];
             for (const n of notasTodas) partes.push(notaAMarkdown(n, 2), '', '---', '');
             md = partes.join('\n');
-            nombre = `notas-organizador-${ui.hoyISO()}.md`;
+            nombre = `notas-lifetime-game-${ui.hoyISO()}.md`;
           } else {
             const n = notasTodas.find(x => x.id === sel);
             if (!n) throw new Error('No se encontró la nota elegida');
@@ -770,13 +770,13 @@ async function render(cont) {
       ui.el('p', { class: 'texto-suave texto-chico' },
         'Descarga un archivo .ics con tus exámenes pendientes (con aviso un día antes) y tus alarmas futuras, listo para importar en cualquier calendario.'),
       infoIcs,
-      botonAccion({ icono: 'descargar', texto: 'Descargar organizador.ics', cargando: 'Armando…' }, async () => {
+      botonAccion({ icono: 'descargar', texto: 'Descargar lifetime-game.ics', cargando: 'Armando…' }, async () => {
         const r = await generarICS();
         if (!r.examenes && !r.alarmas) {
           ui.toast('No hay exámenes pendientes ni alarmas futuras para exportar.', 'info', 4000);
           return;
         }
-        ui.descargarArchivo('organizador.ics', r.texto, 'text/calendar');
+        ui.descargarArchivo('lifetime-game.ics', r.texto, 'text/calendar');
         ui.toast(`Descargado: ${r.examenes} examen(es) y ${r.alarmas} alarma(s)`);
       }),
       ui.el('p', { class: 'texto-suave texto-chico mt' }, 'Para importarlo:'),

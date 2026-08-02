@@ -92,7 +92,11 @@ function itemLista({ num, imagen, titulo, sub, href, acciones }) {
 
 async function iniciarLogin(clientId) {
   if (!window.isSecureContext || !crypto.subtle) {
-    ui.toast('Para conectar Spotify la app tiene que abrirse por HTTPS o desde localhost.', 'error', 5500);
+    ui.toast('Para conectar Spotify la app tiene que abrirse por HTTPS o por 127.0.0.1.', 'error', 5500);
+    return;
+  }
+  if (location.hostname === 'localhost') {
+    ui.toast('Spotify no acepta "localhost". Abrí la app en http://127.0.0.1:' + (location.port || 80) + ' y probá de nuevo.', 'error', 7000);
     return;
   }
   try {
@@ -268,8 +272,13 @@ function pararRefresco() {
 
 function tarjetaGuia() {
   const uri = redirectUri();
-  const esLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
-  const uriValida = location.protocol === 'https:' || esLocal;
+  // Reglas de Spotify: exige HTTPS, salvo direcciones de loopback POR IP.
+  // 'localhost' está explícitamente prohibido; hay que usar 127.0.0.1 o [::1].
+  const esLoopbackIP = ['127.0.0.1', '[::1]', '::1'].includes(location.hostname);
+  const esLocalhost = location.hostname === 'localhost';
+  const uriValida = location.protocol === 'https:' || esLoopbackIP;
+  // Misma app y mismo puerto, pero servida por IP de loopback en vez de 'localhost'.
+  const uriArreglada = uri.replace('//localhost', '//127.0.0.1');
   const paso = (...c) => ui.el('li', { style: { marginBottom: '9px' } }, ...c);
 
   const cajaUri = ui.el('div', { class: 'fila', style: { margin: '8px 0 2px' } },
@@ -281,17 +290,28 @@ function tarjetaGuia() {
     ui.el('p', { class: 'texto-suave' }, 'Se hace una sola vez, es gratis y sirve la cuenta gratuita de Spotify.'),
     ui.el('ol', { style: { paddingLeft: '20px', margin: '0 0 10px' } },
       paso('Entrá a ', ui.el('a', { href: 'https://developer.spotify.com/dashboard', target: '_blank', rel: 'noopener' }, 'developer.spotify.com/dashboard'), ' e iniciá sesión con tu cuenta de Spotify.'),
-      paso('Tocá ', ui.el('strong', {}, '"Create app"'), '. En App name y Description poné lo que quieras (ej: "Organizador").'),
+      paso('Tocá ', ui.el('strong', {}, '"Create app"'), '. En App name y Description poné lo que quieras (ej: "Lifetime Game").'),
       paso('En ', ui.el('strong', {}, '"Redirect URIs"'), ' pegá EXACTAMENTE esta dirección y tocá "Add":', cajaUri),
       paso('En "Which API/SDKs are you planning to use?" marcá ', ui.el('strong', {}, 'Web API'), ', aceptá los términos y tocá "Save".'),
       paso('Abrí la app que creaste, entrá a "Settings" y copiá el ', ui.el('strong', {}, 'Client ID'), '.'),
       paso('Pegalo en los Ajustes de esta app, en el campo "Spotify Client ID".')),
     uriValida
-      ? ui.el('p', { class: 'texto-chico texto-ok' }, 'Esta dirección es válida para Spotify (HTTPS o localhost). ✔')
-      : ui.el('p', { class: 'texto-chico texto-alerta' },
-          'Ojo: Spotify solo acepta direcciones http:// cuando son localhost o 127.0.0.1. ' +
-          'Estás usando http desde otra dirección (por ejemplo la IP de tu red), así que el login NO va a funcionar. ' +
-          'Para usar esto en el celu, serví la app por HTTPS: lo más fácil es subirla a GitHub Pages.'),
+      ? ui.el('p', { class: 'texto-chico texto-ok' }, 'Esta dirección es válida para Spotify. ✔')
+      : esLocalhost
+        ? ui.el('div', { class: 'texto-chico texto-alerta' },
+            ui.el('p', {}, 'Spotify NO acepta direcciones con "localhost": las rechaza al guardarlas. ' +
+              'Pero sí acepta la misma app abierta por su IP de loopback.'),
+            ui.el('p', {}, 'Cerrá esta pestaña y abrí la app en esta otra dirección, que es idéntica pero con 127.0.0.1:'),
+            ui.el('div', { class: 'fila', style: { margin: '6px 0' } },
+              ui.el('code', { style: { background: 'var(--fondo-3)', border: '1px solid var(--borde)', borderRadius: '8px', padding: '7px 10px', fontSize: '.84rem', wordBreak: 'break-all', flex: '1', minWidth: '120px' } }, uriArreglada),
+              ui.el('button', { class: 'btn btn-chico', onClick: () => copiarTexto(uriArreglada) }, ui.icon('copiar'), 'Copiar'),
+              ui.el('a', { class: 'btn btn-chico btn-primario', href: uriArreglada }, 'Abrir')),
+            ui.el('p', {}, 'Después registrá ESA dirección en Spotify. En el celular no hace falta nada de esto: ' +
+              'con la app publicada por HTTPS (GitHub Pages) anda directo.'))
+        : ui.el('p', { class: 'texto-chico texto-alerta' },
+            'Ojo: Spotify solo acepta http:// en direcciones de loopback por IP (127.0.0.1). ' +
+            'Estás usando http desde otra dirección (por ejemplo la IP de tu red), así que el login NO va a funcionar. ' +
+            'Para usar esto en el celu, serví la app por HTTPS: lo más fácil es subirla a GitHub Pages.'),
     ui.el('p', { class: 'texto-suave texto-chico' },
       'Permisos que se piden: historial reciente, tus tops y lo que está sonando. Nada más: no podemos tocar tu cuenta ni tus playlists.'));
   return card;

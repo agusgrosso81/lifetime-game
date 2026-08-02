@@ -209,7 +209,9 @@ async function render(cont) {
       const pend = [];
       for (const n of notas) {
         const items = Array.isArray(n.items) ? n.items : [];
-        const sinMarcar = n.tipo === 'checklist' ? items.filter(i => !i.hecho).length : 0;
+        // Las notas son mixtas: puede haber lista aunque también tengan texto o audio,
+        // así que miramos los ítems y no el campo 'tipo' (que quedó como derivado).
+        const sinMarcar = items.filter(i => !i.hecho).length;
         const dias = n.fechaLimite ? ui.diasHasta(n.fechaLimite) : null;
         const porFecha = dias !== null && dias <= 7; // incluye vencidas (dias < 0)
         if (sinMarcar > 0 || porFecha) pend.push({ n, dias, sinMarcar, total: items.length });
@@ -246,7 +248,7 @@ async function render(cont) {
           if (p.sinMarcar > 0) subPartes.push(`${p.sinMarcar} de ${p.total} ítems pendientes`);
           if (p.n.fechaLimite) subPartes.push('límite: ' + ui.fmtFecha(p.n.fechaLimite));
           card.append(ui.el('div', { class: 'lista-item', style: { cursor: 'pointer' }, onClick: () => window.navegar('notas') },
-            ui.icon(p.n.tipo === 'checklist' ? 'check' : 'nota'),
+            ui.icon(p.total ? 'check' : 'nota'),
             ui.el('div', { class: 'principal' },
               ui.el('div', { class: 'titulo' }, titulo),
               subPartes.length ? ui.el('div', { class: 'sub' }, subPartes.join(' · ')) : null),

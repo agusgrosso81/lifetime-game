@@ -1,7 +1,7 @@
 {
-  "name": "Organizador Diario",
-  "short_name": "Organizador",
-  "description": "Organizador personal: estudio, tiempo, dieta, notas, plata, mapas y música.",
+  "name": "Lifetime Game",
+  "short_name": "Lifetime",
+  "description": "El juego que dura toda la vida: estudio, tiempo, dieta, notas, plata, mapas y música.",
   "lang": "es",
   "start_url": "./",
   "scope": "./",

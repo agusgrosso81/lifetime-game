@@ -115,14 +115,18 @@ function modal({ titulo = '', cuerpo = '', botones = null, alCerrar = null, anch
 
 function confirmar(mensaje, textoOk = 'Eliminar') {
   return new Promise(resolve => {
+    // Ojo: cerrar() dispara alCerrar, así que la promesa se resuelve SIEMPRE ahí.
+    // Si cada botón resolviera por su cuenta, el alCerrar ganaría de mano y todo
+    // saldría 'false' (era el bug por el que no funcionaba ningún borrado).
+    let respuesta = false;
     modal({
       titulo: 'Confirmar',
       cuerpo: el('p', { class: 'texto-confirmar' }, mensaje),
       botones: [
-        { texto: 'Cancelar', clase: 'btn-sec', onClick: c => { c(); resolve(false); } },
-        { texto: textoOk, clase: 'btn-peligro', onClick: c => { c(); resolve(true); } },
+        { texto: 'Cancelar', clase: 'btn-sec', onClick: c => { respuesta = false; c(); } },
+        { texto: textoOk, clase: 'btn-peligro', onClick: c => { respuesta = true; c(); } },
       ],
-      alCerrar: () => resolve(false),
+      alCerrar: () => resolve(respuesta),
     });
   });
 }

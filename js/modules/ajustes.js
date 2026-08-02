@@ -83,7 +83,7 @@ async function render(cont) {
     ui.el('div', { class: 'fila' },
       ui.el('button', { class: 'btn', onClick: async () => {
         const data = await db.exportarJSON(false);
-        ui.descargarArchivo(`organizador-backup-${ui.hoyISO()}.json`, JSON.stringify(data, null, 1));
+        ui.descargarArchivo(`lifetime-game-backup-${ui.hoyISO()}.json`, JSON.stringify(data, null, 1));
         ui.toast('Backup descargado (sin audios/imágenes)');
       } }, ui.icon('descargar'), 'Exportar datos'),
       ui.el('button', { class: 'btn', onClick: () => {

@@ -1,5 +1,6 @@
 // economia.js — Módulo "Plata": movimientos de dinero, presupuestos por categoría y metas de ahorro.
 // Stores: transacciones, categoriasEco, metasAhorro. Moneda global en setting 'moneda'.
+// Settings propios: 'economia.seed', 'economia.metodos', 'economia.saldoInicial'.
 import { db } from '../db.js';
 import { ui } from '../ui.js';
 
@@ -51,7 +52,7 @@ function transDelMes(ym) {
   return db.getRango('transacciones', 'fecha', ym + '-01', ym + '-31');
 }
 
-// Acepta "1500", "1500,50" y "1.500,50" (formato argentino)
+// Acepta "1500", "1500.50", "1500,50" y "1.500,50" (formato argentino). También negativos.
 function parseMonto(v) {
   let s = String(v ?? '').trim().replace(/\s|\$/g, '');
   if (!s) return NaN;
@@ -60,8 +61,28 @@ function parseMonto(v) {
   return isFinite(n) ? n : NaN;
 }
 
+// ---------- Compatibilidad con registros viejos ----------
+// Movimientos guardados por versiones anteriores pueden no tener 'tipo' o traer el
+// monto como texto. Se normalizan al vuelo (sin tocar lo guardado): todo lo que no
+// diga 'ingreso' cuenta como gasto, y un monto ilegible cuenta como 0.
+function tipoDe(o) { return o && o.tipo === 'ingreso' ? 'ingreso' : 'gasto'; }
+function esIngreso(t) { return tipoDe(t) === 'ingreso'; }
+function montoDe(t) { const n = Number(t.monto); return isFinite(n) ? n : 0; }
+function sumaMontos(lista) { return lista.reduce((s, t) => s + montoDe(t), 0); }
+
 const CAT_FALLBACK = { nombre: 'Sin categoría', color: '#95a5a6', tipo: 'gasto' };
 function catDe(cats, id) { return cats.find(c => c.id === id) || CAT_FALLBACK; }
+
+// ---------- Saldo inicial (setting 'economia.saldoInicial') ----------
+// Devuelve { monto, configurado }: 'configurado' distingue "nunca lo cargué"
+// de "lo cargué y vale 0", para mostrar la sugerencia solo cuando corresponde.
+async function leerSaldoInicial() {
+  const guardado = await db.getSetting('economia.saldoInicial', null);
+  const hayValor = guardado !== null && guardado !== undefined && guardado !== '';
+  const n = Number(guardado);
+  const valido = hayValor && isFinite(n);
+  return { monto: valido ? n : 0, configurado: valido };
+}
 
 // ---------- Render principal ----------
 async function render(cont) {
@@ -71,10 +92,15 @@ async function render(cont) {
   let tabsCtl = null;
   const refrescarTab = () => { if (tabsCtl) tabsCtl.ir(tabsCtl.activa); };
 
+  // Cabecera: el botón "Nuevo movimiento" vive acá para estar SIEMPRE a mano,
+  // sin importar en qué pestaña esté parado el usuario.
   cont.append(ui.el('div', { class: 'cabecera-modulo' },
     ui.el('h2', {}, ui.icon('dinero'), 'Plata'),
-    ui.el('button', { class: 'btn btn-chico', onClick: () => modalCategorias(refrescarTab) },
-      ui.icon('etiqueta'), 'Categorías')));
+    ui.el('div', { class: 'fila', style: { gap: '8px' } },
+      ui.el('button', { class: 'btn btn-chico', onClick: () => modalCategorias(refrescarTab) },
+        ui.icon('etiqueta'), 'Categorías'),
+      ui.el('button', { class: 'btn btn-primario', onClick: () => modalTransaccion(null, refrescarTab) },
+        ui.icon('mas'), 'Nuevo movimiento'))));
 
   // Selector de mes con flechas (compartido)
   function selectorMes(onCambio) {
@@ -90,27 +116,57 @@ async function render(cont) {
   async function renderResumen(tc) {
     const moneda = await db.getSetting('moneda', '$');
     const fmt = n => ui.fmtMonto(n, moneda);
-    const cats = await db.getAll('categoriasEco');
 
     const caja = ui.el('div');
     tc.append(caja);
 
     async function pintar() {
       caja.innerHTML = '';
+      // Se releen en cada pintada: pueden haber cambiado desde el modal de categorías.
+      const cats = await db.getAll('categoriasEco');
 
-      // Saldo total histórico
+      // ---- Saldo total = saldo inicial + ingresos − gastos (toda la historia) ----
+      const { monto: saldoInicial, configurado: siConfigurado } = await leerSaldoInicial();
       const todas = await db.getAll('transacciones');
-      const saldo = todas.reduce((s, t) => s + (t.tipo === 'ingreso' ? Number(t.monto) : -Number(t.monto)), 0);
-      caja.append(ui.el('div', { class: 'tarjeta metrica' },
+      const ingTotal = sumaMontos(todas.filter(esIngreso));
+      const gasTotal = sumaMontos(todas.filter(t => !esIngreso(t)));
+      const saldo = saldoInicial + ingTotal - gasTotal;
+
+      const cardSaldo = ui.el('div', { class: 'tarjeta metrica' },
         ui.el('div', { class: 'valor ' + (saldo >= 0 ? 'texto-ok' : 'texto-peligro'), style: { fontSize: '2rem' } }, fmt(saldo)),
-        ui.el('div', { class: 'etiqueta' }, 'Saldo total (toda la historia)')));
+        ui.el('div', { class: 'etiqueta' }, 'Saldo total (toda la historia)'),
+        ui.el('div', { class: 'texto-chico texto-suave', style: { marginTop: '6px' } },
+          `Inicial ${fmt(saldoInicial)} + ingresos ${fmt(ingTotal)} − gastos ${fmt(gasTotal)}`));
+
+      if (!siConfigurado) {
+        // Sugerencia sutil: solo un renglón suave, sin cartel ni interrupción.
+        cardSaldo.append(ui.el('div', { class: 'texto-chico texto-suave', style: { marginTop: '4px', opacity: '.85' } },
+          '¿Ya tenías plata antes de arrancar? Cargala como saldo inicial.'));
+      }
+
+      cardSaldo.append(ui.el('div', { class: 'fila', style: { justifyContent: 'center', marginTop: '10px' } },
+        ui.el('button', { class: 'btn btn-sec btn-chico', onClick: () => modalSaldoInicial(pintar) },
+          ui.icon('editar'), 'Saldo inicial')));
+      caja.append(cardSaldo);
+
+      // ---- Accesos rápidos: cargar plata desde la primera pantalla ----
+      const estiloRapido = { padding: '15px 8px', fontSize: '14.5px' };
+      caja.append(ui.el('div', { class: 'grilla grilla-2 mb' },
+        ui.el('button', {
+          class: 'btn btn-peligro', style: estiloRapido,
+          onClick: () => modalTransaccion(null, pintar, 'gasto'),
+        }, ui.icon('mas'), 'Registrar gasto'),
+        ui.el('button', {
+          class: 'btn btn-ok', style: estiloRapido,
+          onClick: () => modalTransaccion(null, pintar, 'ingreso'),
+        }, ui.icon('mas'), 'Registrar ingreso')));
 
       caja.append(selectorMes(pintar));
 
       // Métricas del mes
       const trans = await transDelMes(mesSel);
-      const ingresos = trans.filter(t => t.tipo === 'ingreso').reduce((s, t) => s + Number(t.monto), 0);
-      const gastos = trans.filter(t => t.tipo === 'gasto').reduce((s, t) => s + Number(t.monto), 0);
+      const ingresos = sumaMontos(trans.filter(esIngreso));
+      const gastos = sumaMontos(trans.filter(t => !esIngreso(t)));
       const balance = ingresos - gastos;
       caja.append(ui.el('div', { class: 'grilla grilla-3 mb' },
         ui.el('div', { class: 'tarjeta metrica sin-margen' },
@@ -123,7 +179,7 @@ async function render(cont) {
 
       // Comparación con el mes anterior
       const transPrev = await transDelMes(mesSuma(mesSel, -1));
-      const gastosPrev = transPrev.filter(t => t.tipo === 'gasto').reduce((s, t) => s + Number(t.monto), 0);
+      const gastosPrev = sumaMontos(transPrev.filter(t => !esIngreso(t)));
       let comparacion;
       if (gastosPrev > 0 && gastos > 0) {
         const pct = Math.round((gastos - gastosPrev) / gastosPrev * 100);
@@ -138,13 +194,13 @@ async function render(cont) {
       caja.append(ui.el('div', { class: 'tarjeta' }, ui.el('p', { class: 'sin-margen' }, comparacion)));
 
       // Torta de gastos por categoría
-      const gastosMes = trans.filter(t => t.tipo === 'gasto');
+      const gastosMes = trans.filter(t => !esIngreso(t));
       const cardTorta = ui.el('div', { class: 'tarjeta' }, ui.el('h3', {}, 'Gastos por categoría'));
       if (!gastosMes.length) {
         cardTorta.append(ui.estadoVacio('Sin gastos este mes. ¡El bolsillo agradece!', 'dinero'));
       } else {
         const porCat = {};
-        for (const t of gastosMes) porCat[t.categoria || '_'] = (porCat[t.categoria || '_'] || 0) + Number(t.monto);
+        for (const t of gastosMes) porCat[t.categoria || '_'] = (porCat[t.categoria || '_'] || 0) + montoDe(t);
         const datos = Object.entries(porCat)
           .map(([id, valor]) => { const c = catDe(cats, id); return { etiqueta: c.nombre, valor, color: c.color }; })
           .sort((a, b) => b.valor - a.valor);
@@ -160,8 +216,8 @@ async function render(cont) {
       const ultimoDia = esMesActual ? new Date().getDate() : diasEnMes(mesSel);
       const porDia = {};
       for (const t of gastosMes) {
-        const d = Number(t.fecha.slice(8, 10));
-        porDia[d] = (porDia[d] || 0) + Number(t.monto);
+        const d = Number(String(t.fecha || '').slice(8, 10));
+        if (d) porDia[d] = (porDia[d] || 0) + montoDe(t);
       }
       const datosLinea = [];
       let acum = 0;
@@ -176,6 +232,52 @@ async function render(cont) {
       caja.append(cardLinea);
     }
     await pintar();
+  }
+
+  // ---------- Modal de saldo inicial ----------
+  async function modalSaldoInicial(alGuardar) {
+    const moneda = await db.getSetting('moneda', '$');
+    const { monto: actual, configurado } = await leerSaldoInicial();
+
+    const inp = ui.campo({
+      tipo: 'text', etiqueta: `Saldo inicial (${moneda})`,
+      valor: configurado ? String(actual) : '',
+      inputmode: 'decimal', placeholder: '0', autocomplete: 'off',
+    });
+
+    const cuerpo = ui.el('div', {},
+      ui.el('p', { class: 'texto-chico texto-suave' },
+        'La plata que ya tenías antes de empezar a usar la app. Se suma al saldo total, pero no cuenta como movimiento de ningún mes.'),
+      inp,
+      ui.el('p', { class: 'texto-chico texto-suave sin-margen' },
+        'Podés escribir 1500, 1500.50 o 1.500,50. Si arrancás debiendo, poné un número negativo.'));
+
+    let cerrarModal = null;
+    const guardar = async () => {
+      const txt = inp.input.value.trim();
+      const monto = txt === '' ? 0 : parseMonto(txt);
+      if (isNaN(monto)) {
+        ui.toast('No entendí ese monto. Escribilo así: 1500 o 1.500,50', 'error', 4000);
+        inp.input.focus(); inp.input.select();
+        return;
+      }
+      await db.setSetting('economia.saldoInicial', monto);
+      ui.toast('Saldo inicial guardado');
+      if (cerrarModal) cerrarModal();
+      if (alGuardar) alGuardar();
+    };
+    inp.input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardar(); } });
+
+    const modalRef = ui.modal({
+      titulo: 'Saldo inicial',
+      cuerpo,
+      botones: [
+        { texto: 'Cancelar', clase: 'btn-sec' },
+        { texto: 'Guardar', clase: 'btn-primario', onClick: () => guardar() },
+      ],
+    });
+    cerrarModal = modalRef.cerrar;
+    ui.alPintar(() => { inp.input.focus(); inp.input.select(); });
   }
 
   // ==================================================================
@@ -193,7 +295,7 @@ async function render(cont) {
       caja.innerHTML = '';
       caja.append(selectorMes(pintar));
       const cats = await db.getAll('categoriasEco');
-      const trans = (await transDelMes(mesSel)).sort((a, b) => b.fecha.localeCompare(a.fecha));
+      const trans = (await transDelMes(mesSel)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
 
       if (!trans.length) {
         caja.append(ui.estadoVacio('No hay movimientos este mes. Tocá el + para agregar el primero.', 'dinero'));
@@ -203,7 +305,7 @@ async function render(cont) {
         for (const t of trans) (grupos[t.fecha] = grupos[t.fecha] || []).push(t);
         for (const fecha of Object.keys(grupos)) {
           const dia = grupos[fecha];
-          const netoDia = dia.reduce((s, t) => s + (t.tipo === 'ingreso' ? Number(t.monto) : -Number(t.monto)), 0);
+          const netoDia = dia.reduce((s, t) => s + (esIngreso(t) ? montoDe(t) : -montoDe(t)), 0);
           const card = ui.el('div', { class: 'tarjeta' },
             ui.el('div', { class: 'fila espaciado mb' },
               ui.el('strong', {}, ui.fmtFecha(fecha)),
@@ -219,13 +321,14 @@ async function render(cont) {
                 ui.el('div', { class: 'titulo' }, titulo),
                 sub ? ui.el('div', { class: 'sub' }, sub) : null),
               ui.el('span', {
-                class: t.tipo === 'ingreso' ? 'texto-ok' : 'texto-peligro',
+                class: esIngreso(t) ? 'texto-ok' : 'texto-peligro',
                 style: { fontWeight: '700', whiteSpace: 'nowrap' },
-              }, (t.tipo === 'ingreso' ? '+' : '−') + fmt(Number(t.monto))),
+              }, (esIngreso(t) ? '+' : '−') + fmt(montoDe(t))),
               ui.el('div', { class: 'acciones' },
                 ui.el('button', { class: 'btn-icono', 'aria-label': 'Editar', onClick: () => modalTransaccion(t, pintar) }, ui.icon('editar')),
                 ui.el('button', { class: 'btn-icono', 'aria-label': 'Eliminar', onClick: async () => {
-                  if (!(await ui.confirmar(`¿Eliminar este movimiento de ${fmt(Number(t.monto))}?`))) return;
+                  const ok = await ui.confirmar(`¿Eliminar este movimiento de ${fmt(montoDe(t))}?`);
+                  if (ok !== true) return;
                   await db.del('transacciones', t.id);
                   ui.toast('Movimiento eliminado');
                   pintar();
@@ -236,8 +339,8 @@ async function render(cont) {
       }
 
       // Totales del mes al pie
-      const ingresos = trans.filter(t => t.tipo === 'ingreso').reduce((s, t) => s + Number(t.monto), 0);
-      const gastos = trans.filter(t => t.tipo === 'gasto').reduce((s, t) => s + Number(t.monto), 0);
+      const ingresos = sumaMontos(trans.filter(esIngreso));
+      const gastos = sumaMontos(trans.filter(t => !esIngreso(t)));
       caja.append(ui.el('div', { class: 'grilla grilla-3 mt' },
         ui.el('div', { class: 'tarjeta metrica sin-margen' },
           ui.el('div', { class: 'valor texto-ok' }, fmt(ingresos)), ui.el('div', { class: 'etiqueta' }, 'Ingresos del mes')),
@@ -251,10 +354,13 @@ async function render(cont) {
   }
 
   // ---------- Modal de transacción (nueva o edición) ----------
-  async function modalTransaccion(t, alGuardar) {
-    const cats = await db.getAll('categoriasEco');
+  // t: registro a editar (o null). alGuardar: callback para refrescar la vista.
+  // tipoInicial: 'gasto' | 'ingreso' preseleccionado al crear uno nuevo.
+  async function modalTransaccion(t, alGuardar, tipoInicial = 'gasto') {
+    let cats = await db.getAll('categoriasEco');
+    const moneda = await db.getSetting('moneda', '$');
     const metodos = await db.getSetting('economia.metodos', METODOS_DEFAULT);
-    let tipo = t ? t.tipo : 'gasto';
+    let tipo = t ? tipoDe(t) : (tipoInicial === 'ingreso' ? 'ingreso' : 'gasto');
     let metodoSel = t ? (t.metodo || '') : (metodos[0] || '');
 
     // Chips de tipo
@@ -270,14 +376,34 @@ async function render(cont) {
     };
     pintarTipo();
 
-    const inMonto = ui.campo({ tipo: 'text', etiqueta: `Monto (${await db.getSetting('moneda', '$')})`, valor: t ? t.monto : '', inputmode: 'decimal', placeholder: '0' });
+    // Monto: input de texto libre (nada de type=number, que en el celu bloquea la coma).
+    const inMonto = ui.campo({
+      tipo: 'text', etiqueta: `Monto (${moneda})`,
+      valor: t ? montoDe(t) : '',
+      inputmode: 'decimal', placeholder: '0', autocomplete: 'off',
+    });
+    const ayudaMonto = ui.el('p', { class: 'texto-chico texto-suave', style: { marginTop: '-6px' } },
+      'Podés escribir 1500, 1500.50 o 1.500,50.');
+
     const selCat = ui.campo({ tipo: 'select', etiqueta: 'Categoría', valor: t ? t.categoria : '', opciones: [] });
+    const avisoCat = ui.el('p', { class: 'texto-chico texto-suave', style: { marginTop: '-6px' } });
     const pintarCats = () => {
-      const deTipo = cats.filter(c => c.tipo === tipo);
+      const deTipo = cats.filter(c => tipoDe(c) === tipo);
       selCat.input.innerHTML = '';
       for (const c of deTipo) selCat.input.append(ui.el('option', { value: c.id }, c.nombre));
-      const valorPrevio = t && t.tipo === tipo ? t.categoria : null;
+      const valorPrevio = t && tipoDe(t) === tipo ? t.categoria : null;
       if (valorPrevio && deTipo.some(c => c.id === valorPrevio)) selCat.input.value = valorPrevio;
+      // Si no hay categorías de este tipo, ofrecer crear una sin salir del modal.
+      avisoCat.innerHTML = '';
+      avisoCat.classList.toggle('oculto', deTipo.length > 0);
+      if (!deTipo.length) {
+        avisoCat.append(
+          `No tenés categorías de ${tipo}. `,
+          ui.el('button', {
+            class: 'btn btn-chico', style: { marginLeft: '4px' },
+            onClick: () => modalCategorias(async () => { cats = await db.getAll('categoriasEco'); pintarCats(); }),
+          }, ui.icon('mas'), 'Crear una'));
+      }
     };
     pintarCats();
 
@@ -304,41 +430,85 @@ async function render(cont) {
     const cuerpo = ui.el('div', {},
       ui.el('div', { class: 'campo-etiqueta mb', style: { marginBottom: '5px' } }, 'Tipo'), filaTipo,
       inMonto,
+      ayudaMonto,
       selCat,
+      avisoCat,
       ui.el('div', { class: 'fila-campos' }, inFecha, inDesc),
       ui.el('div', { class: 'campo-etiqueta', style: { marginBottom: '5px' } }, 'Método de pago'), filaMetodo);
 
-    ui.modal({
-      titulo: t ? 'Editar movimiento' : 'Nuevo movimiento',
+    let cerrarModal = null;
+    const guardar = async () => {
+      const txt = inMonto.input.value.trim();
+      if (!txt) {
+        ui.toast('Escribí cuánta plata fue (ej: 1500)', 'error');
+        inMonto.input.focus();
+        return;
+      }
+      const monto = parseMonto(txt);
+      if (isNaN(monto)) {
+        ui.toast(`No entendí "${txt}". Escribí solo números, así: 1500 o 1.500,50`, 'error', 4500);
+        inMonto.input.focus(); inMonto.input.select();
+        return;
+      }
+      if (monto <= 0) {
+        ui.toast('El monto tiene que ser mayor a cero', 'error');
+        inMonto.input.focus(); inMonto.input.select();
+        return;
+      }
+      if (!selCat.input.value) {
+        ui.toast(`Primero creá una categoría de ${tipo} con el botón de acá abajo`, 'error', 4000);
+        return;
+      }
+      const fecha = inFecha.input.value || ui.hoyISO();
+      const reg = {
+        ...(t || {}),
+        fecha,
+        tipo,
+        monto,
+        categoria: selCat.input.value,
+        descripcion: inDesc.input.value.trim(),
+        metodo: metodoSel,
+      };
+      await db.put('transacciones', reg);
+      // Que el movimiento recién cargado se vea sí o sí: si es de otro mes, saltamos ahí.
+      mesSel = fecha.slice(0, 7);
+      ui.toast(t ? 'Movimiento actualizado' : (tipo === 'ingreso' ? 'Ingreso agregado' : 'Gasto agregado'));
+      if (cerrarModal) cerrarModal();
+      if (alGuardar) alGuardar();
+    };
+
+    inMonto.input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardar(); } });
+    inDesc.input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardar(); } });
+
+    const modalRef = ui.modal({
+      titulo: t ? 'Editar movimiento' : (tipo === 'ingreso' ? 'Nuevo ingreso' : 'Nuevo gasto'),
       cuerpo,
       botones: [
         { texto: 'Cancelar', clase: 'btn-sec' },
-        { texto: 'Guardar', clase: 'btn-primario', onClick: async (cerrar) => {
-          const monto = parseMonto(inMonto.input.value);
-          if (isNaN(monto) || monto <= 0) return ui.toast('Poné un monto válido mayor a cero', 'error');
-          if (!selCat.input.value) return ui.toast(`Primero creá una categoría de ${tipo} desde el botón Categorías`, 'error', 4000);
-          const reg = {
-            ...(t || {}),
-            fecha: inFecha.input.value || ui.hoyISO(),
-            tipo,
-            monto,
-            categoria: selCat.input.value,
-            descripcion: inDesc.input.value.trim(),
-            metodo: metodoSel,
-          };
-          await db.put('transacciones', reg);
-          ui.toast(t ? 'Movimiento actualizado' : 'Movimiento agregado');
-          cerrar();
-          if (alGuardar) alGuardar();
-        } },
+        { texto: 'Guardar', clase: 'btn-primario', onClick: () => guardar() },
       ],
     });
+    cerrarModal = modalRef.cerrar;
+    // Foco directo al monto: es lo primero que uno quiere escribir.
+    ui.alPintar(() => { inMonto.input.focus(); inMonto.input.select(); });
   }
 
   // ---------- Modal de gestión de métodos de pago ----------
   async function modalMetodos(alCambiar) {
     const lista = ui.el('div');
     const inNuevo = ui.el('input', { class: 'input', type: 'text', placeholder: 'Nuevo método (ej: MODO)' });
+
+    const agregar = async () => {
+      const nombre = inNuevo.value.trim();
+      if (!nombre) return ui.toast('Escribí un nombre para el método', 'error');
+      const metodos = await db.getSetting('economia.metodos', METODOS_DEFAULT);
+      if (metodos.some(m => m.toLowerCase() === nombre.toLowerCase())) return ui.toast('Ese método ya existe', 'error');
+      await db.setSetting('economia.metodos', [...metodos, nombre]);
+      inNuevo.value = '';
+      pintar();
+      if (alCambiar) alCambiar();
+    };
+    inNuevo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } });
 
     const pintar = async () => {
       const metodos = await db.getSetting('economia.metodos', METODOS_DEFAULT);
@@ -348,7 +518,11 @@ async function render(cont) {
         lista.append(ui.el('div', { class: 'lista-item' },
           ui.el('div', { class: 'principal' }, ui.el('div', { class: 'titulo' }, m)),
           ui.el('button', { class: 'btn-icono', 'aria-label': 'Eliminar', onClick: async () => {
-            await db.setSetting('economia.metodos', metodos.filter(x => x !== m));
+            const ok = await ui.confirmar(`¿Eliminar el método "${m}"? Los movimientos ya cargados lo conservan.`);
+            if (ok !== true) return;
+            const actuales = await db.getSetting('economia.metodos', METODOS_DEFAULT);
+            await db.setSetting('economia.metodos', actuales.filter(x => x !== m));
+            ui.toast('Método eliminado');
             pintar();
             if (alCambiar) alCambiar();
           } }, ui.icon('basura'))));
@@ -362,16 +536,7 @@ async function render(cont) {
         lista,
         ui.el('div', { class: 'fila mt' },
           inNuevo,
-          ui.el('button', { class: 'btn btn-primario', onClick: async () => {
-            const nombre = inNuevo.value.trim();
-            if (!nombre) return ui.toast('Escribí un nombre para el método', 'error');
-            const metodos = await db.getSetting('economia.metodos', METODOS_DEFAULT);
-            if (metodos.some(m => m.toLowerCase() === nombre.toLowerCase())) return ui.toast('Ese método ya existe', 'error');
-            await db.setSetting('economia.metodos', [...metodos, nombre]);
-            inNuevo.value = '';
-            pintar();
-            if (alCambiar) alCambiar();
-          } }, ui.icon('mas'), 'Agregar'))),
+          ui.el('button', { class: 'btn btn-primario', onClick: () => agregar() }, ui.icon('mas'), 'Agregar'))),
       botones: [{ texto: 'Listo', clase: 'btn-primario' }],
     });
   }
@@ -390,10 +555,10 @@ async function render(cont) {
       const ym = mesActual();
       const hoyDia = new Date().getDate();
       const totalDias = diasEnMes(ym);
-      const cats = (await db.getAll('categoriasEco')).filter(c => c.tipo === 'gasto');
-      const gastosMes = (await transDelMes(ym)).filter(t => t.tipo === 'gasto');
+      const cats = (await db.getAll('categoriasEco')).filter(c => tipoDe(c) === 'gasto');
+      const gastosMes = (await transDelMes(ym)).filter(t => !esIngreso(t));
       const gastadoPor = {};
-      for (const t of gastosMes) gastadoPor[t.categoria] = (gastadoPor[t.categoria] || 0) + Number(t.monto);
+      for (const t of gastosMes) gastadoPor[t.categoria] = (gastadoPor[t.categoria] || 0) + montoDe(t);
 
       caja.append(ui.el('p', { class: 'texto-suave texto-chico' },
         `Presupuestos de ${mesNombre(ym)} · día ${hoyDia} de ${totalDias}`));
@@ -433,17 +598,19 @@ async function render(cont) {
 
         // Edición inline del presupuesto
         const inPres = ui.el('input', {
-          class: 'input', type: 'number', min: '0', step: '0.01', value: pres,
-          style: { maxWidth: '130px' }, inputmode: 'decimal', 'aria-label': 'Presupuesto mensual',
+          class: 'input', type: 'text', value: pres,
+          style: { maxWidth: '130px' }, inputmode: 'decimal', autocomplete: 'off', 'aria-label': 'Presupuesto mensual',
         });
-        inPres.addEventListener('change', async () => {
-          const nuevo = parseMonto(inPres.value);
-          if (isNaN(nuevo) || nuevo < 0) return ui.toast('Monto de presupuesto inválido', 'error');
+        const guardarPres = async () => {
+          const nuevo = inPres.value.trim() === '' ? 0 : parseMonto(inPres.value);
+          if (isNaN(nuevo) || nuevo < 0) return ui.toast('Monto de presupuesto inválido. Escribí algo como 20000', 'error', 3500);
           c.presupuestoMensual = nuevo || null; // 0 = quitar presupuesto
           await db.put('categoriasEco', c);
           ui.toast(nuevo ? 'Presupuesto actualizado' : 'Presupuesto quitado');
           pintar();
-        });
+        };
+        inPres.addEventListener('change', guardarPres);
+        inPres.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); inPres.blur(); } });
         card.append(ui.el('div', { class: 'fila mt' },
           ui.el('span', { class: 'texto-chico texto-suave' }, 'Presupuesto mensual:'), inPres,
           ui.el('span', { class: 'texto-chico texto-suave' }, '(0 para quitarlo)')));
@@ -459,23 +626,32 @@ async function render(cont) {
               ui.el('div', { class: 'titulo' }, c.nombre),
               ui.el('div', { class: 'sub' }, `Gastado este mes: ${fmt(gastadoPor[c.id] || 0)}`)),
             ui.el('button', { class: 'btn btn-chico', onClick: () => {
-              const inp = ui.campo({ tipo: 'text', etiqueta: `Presupuesto mensual para ${c.nombre}`, valor: '', inputmode: 'decimal', placeholder: '0' });
-              ui.modal({
+              const inp = ui.campo({ tipo: 'text', etiqueta: `Presupuesto mensual para ${c.nombre}`, valor: '', inputmode: 'decimal', placeholder: '0', autocomplete: 'off' });
+              let cerrarPres = null;
+              const guardar = async () => {
+                const monto = parseMonto(inp.input.value);
+                if (isNaN(monto) || monto <= 0) {
+                  ui.toast('Poné un monto mayor a cero (ej: 20000)', 'error');
+                  inp.input.focus(); inp.input.select();
+                  return;
+                }
+                c.presupuestoMensual = monto;
+                await db.put('categoriasEco', c);
+                ui.toast('Presupuesto asignado');
+                if (cerrarPres) cerrarPres();
+                pintar();
+              };
+              inp.input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardar(); } });
+              const mp = ui.modal({
                 titulo: 'Asignar presupuesto',
                 cuerpo: inp,
                 botones: [
                   { texto: 'Cancelar', clase: 'btn-sec' },
-                  { texto: 'Guardar', clase: 'btn-primario', onClick: async (cerrar) => {
-                    const monto = parseMonto(inp.input.value);
-                    if (isNaN(monto) || monto <= 0) return ui.toast('Poné un monto mayor a cero', 'error');
-                    c.presupuestoMensual = monto;
-                    await db.put('categoriasEco', c);
-                    ui.toast('Presupuesto asignado');
-                    cerrar();
-                    pintar();
-                  } },
+                  { texto: 'Guardar', clase: 'btn-primario', onClick: () => guardar() },
                 ],
               });
+              cerrarPres = mp.cerrar;
+              ui.alPintar(() => { inp.input.focus(); inp.input.select(); });
             } }, 'Asignar')));
         }
         caja.append(card);
@@ -521,7 +697,8 @@ async function render(cont) {
               cumplida ? ui.el('span', { class: 'chip chip-ok' }, ui.icon('check'), 'Meta cumplida') : null,
               ui.el('button', { class: 'btn-icono', 'aria-label': 'Editar', onClick: () => modalMeta(m) }, ui.icon('editar')),
               ui.el('button', { class: 'btn-icono', 'aria-label': 'Eliminar', onClick: async () => {
-                if (!(await ui.confirmar(`¿Eliminar la meta "${m.nombre}"?`))) return;
+                const ok = await ui.confirmar(`¿Eliminar la meta "${m.nombre}"?`);
+                if (ok !== true) return;
                 await db.del('metasAhorro', m.id);
                 ui.toast('Meta eliminada');
                 pintar();
@@ -557,62 +734,75 @@ async function render(cont) {
 
     // Modal de aporte (+1) o retiro (-1)
     function modalAporte(m, signo) {
-      const inp = ui.campo({ tipo: 'text', etiqueta: `Monto (${moneda})`, valor: '', inputmode: 'decimal', placeholder: '0' });
-      ui.modal({
+      const inp = ui.campo({ tipo: 'text', etiqueta: `Monto (${moneda})`, valor: '', inputmode: 'decimal', placeholder: '0', autocomplete: 'off' });
+      let cerrarModal = null;
+      const guardar = async () => {
+        const monto = parseMonto(inp.input.value);
+        if (isNaN(monto) || monto <= 0) {
+          ui.toast('Poné un monto mayor a cero (ej: 1500)', 'error');
+          inp.input.focus(); inp.input.select();
+          return;
+        }
+        const actual = Number(m.ahorrado) || 0;
+        const nuevo = actual + signo * monto;
+        if (nuevo < 0) return ui.toast(`No podés retirar más de lo ahorrado (${fmt(actual)})`, 'error', 3500);
+        m.ahorrado = nuevo;
+        await db.put('metasAhorro', m);
+        if (signo > 0 && nuevo >= Number(m.objetivo)) ui.toast('¡Meta cumplida! Felicitaciones 🎉', 'ok', 4000);
+        else ui.toast(signo > 0 ? 'Aporte registrado' : 'Retiro registrado');
+        if (cerrarModal) cerrarModal();
+        pintar();
+      };
+      inp.input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardar(); } });
+      const mo = ui.modal({
         titulo: signo > 0 ? `Aporte a "${m.nombre}"` : `Retiro de "${m.nombre}"`,
         cuerpo: ui.el('div', {},
           inp,
           ui.el('p', { class: 'texto-suave texto-chico' }, `Ahorrado actual: ${fmt(Number(m.ahorrado) || 0)}`)),
         botones: [
           { texto: 'Cancelar', clase: 'btn-sec' },
-          { texto: 'Guardar', clase: 'btn-primario', onClick: async (cerrar) => {
-            const monto = parseMonto(inp.input.value);
-            if (isNaN(monto) || monto <= 0) return ui.toast('Poné un monto mayor a cero', 'error');
-            const actual = Number(m.ahorrado) || 0;
-            const nuevo = actual + signo * monto;
-            if (nuevo < 0) return ui.toast(`No podés retirar más de lo ahorrado (${fmt(actual)})`, 'error', 3500);
-            m.ahorrado = nuevo;
-            await db.put('metasAhorro', m);
-            if (signo > 0 && nuevo >= Number(m.objetivo)) ui.toast('¡Meta cumplida! Felicitaciones 🎉', 'ok', 4000);
-            else ui.toast(signo > 0 ? 'Aporte registrado' : 'Retiro registrado');
-            cerrar();
-            pintar();
-          } },
+          { texto: 'Guardar', clase: 'btn-primario', onClick: () => guardar() },
         ],
       });
+      cerrarModal = mo.cerrar;
+      ui.alPintar(() => { inp.input.focus(); inp.input.select(); });
     }
 
     // Modal de alta/edición de meta
     function modalMeta(m) {
       const inNombre = ui.campo({ tipo: 'text', etiqueta: 'Nombre', valor: m ? m.nombre : '', placeholder: 'Ej: Zapatillas nuevas' });
-      const inObjetivo = ui.campo({ tipo: 'text', etiqueta: `Objetivo (${moneda})`, valor: m ? m.objetivo : '', inputmode: 'decimal', placeholder: '0' });
-      const inAhorrado = ui.campo({ tipo: 'text', etiqueta: `Ya ahorrado (${moneda})`, valor: m ? m.ahorrado : '0', inputmode: 'decimal' });
+      const inObjetivo = ui.campo({ tipo: 'text', etiqueta: `Objetivo (${moneda})`, valor: m ? m.objetivo : '', inputmode: 'decimal', placeholder: '0', autocomplete: 'off' });
+      const inAhorrado = ui.campo({ tipo: 'text', etiqueta: `Ya ahorrado (${moneda})`, valor: m ? m.ahorrado : '0', inputmode: 'decimal', autocomplete: 'off' });
       const inFecha = ui.campo({ tipo: 'date', etiqueta: 'Fecha límite (opcional)', valor: m ? (m.fechaLimite || '') : '' });
       const inNotas = ui.campo({ tipo: 'textarea', etiqueta: 'Notas (opcional)', valor: m ? (m.notas || '') : '' });
-      ui.modal({
+      let cerrarModal = null;
+      const guardar = async () => {
+        const nombre = inNombre.input.value.trim();
+        const objetivo = parseMonto(inObjetivo.input.value);
+        const ahorrado = parseMonto(inAhorrado.input.value || '0');
+        if (!nombre) return ui.toast('La meta necesita un nombre', 'error');
+        if (isNaN(objetivo) || objetivo <= 0) return ui.toast('El objetivo tiene que ser mayor a cero', 'error');
+        if (isNaN(ahorrado) || ahorrado < 0) return ui.toast('Lo ahorrado no puede ser negativo', 'error');
+        await db.put('metasAhorro', {
+          ...(m || {}),
+          nombre, objetivo, ahorrado,
+          fechaLimite: inFecha.input.value || null,
+          notas: inNotas.input.value.trim(),
+        });
+        ui.toast(m ? 'Meta actualizada' : 'Meta creada');
+        if (cerrarModal) cerrarModal();
+        pintar();
+      };
+      const mo = ui.modal({
         titulo: m ? 'Editar meta' : 'Nueva meta',
         cuerpo: ui.el('div', {}, inNombre, ui.el('div', { class: 'fila-campos' }, inObjetivo, inAhorrado), inFecha, inNotas),
         botones: [
           { texto: 'Cancelar', clase: 'btn-sec' },
-          { texto: 'Guardar', clase: 'btn-primario', onClick: async (cerrar) => {
-            const nombre = inNombre.input.value.trim();
-            const objetivo = parseMonto(inObjetivo.input.value);
-            const ahorrado = parseMonto(inAhorrado.input.value || '0');
-            if (!nombre) return ui.toast('La meta necesita un nombre', 'error');
-            if (isNaN(objetivo) || objetivo <= 0) return ui.toast('El objetivo tiene que ser mayor a cero', 'error');
-            if (isNaN(ahorrado) || ahorrado < 0) return ui.toast('Lo ahorrado no puede ser negativo', 'error');
-            await db.put('metasAhorro', {
-              ...(m || {}),
-              nombre, objetivo, ahorrado,
-              fechaLimite: inFecha.input.value || null,
-              notas: inNotas.input.value.trim(),
-            });
-            ui.toast(m ? 'Meta actualizada' : 'Meta creada');
-            cerrar();
-            pintar();
-          } },
+          { texto: 'Guardar', clase: 'btn-primario', onClick: () => guardar() },
         ],
       });
+      cerrarModal = mo.cerrar;
+      ui.alPintar(() => inNombre.input.focus());
     }
 
     await pintar();
@@ -626,10 +816,11 @@ async function render(cont) {
     let huboCambios = false;
 
     const pintar = async () => {
+      const moneda = await db.getSetting('moneda', '$');
       const cats = await db.getAll('categoriasEco');
       lista.innerHTML = '';
       for (const tipo of ['gasto', 'ingreso']) {
-        const deTipo = cats.filter(c => c.tipo === tipo);
+        const deTipo = cats.filter(c => tipoDe(c) === tipo);
         lista.append(ui.el('h4', { class: 'mt', style: { marginBottom: '4px' } }, tipo === 'gasto' ? 'Gastos' : 'Ingresos'));
         if (!deTipo.length) lista.append(ui.el('p', { class: 'texto-suave texto-chico' }, 'No hay categorías de este tipo.'));
         for (const c of deTipo) {
@@ -637,15 +828,16 @@ async function render(cont) {
             ui.el('span', { class: 'punto-color', style: { background: c.color } }),
             ui.el('div', { class: 'principal' },
               ui.el('div', { class: 'titulo' }, c.nombre),
-              c.tipo === 'gasto' && Number(c.presupuestoMensual) > 0
-                ? ui.el('div', { class: 'sub' }, `Presupuesto: ${ui.fmtMonto(Number(c.presupuestoMensual), await db.getSetting('moneda', '$'))}`)
+              tipo === 'gasto' && Number(c.presupuestoMensual) > 0
+                ? ui.el('div', { class: 'sub' }, `Presupuesto: ${ui.fmtMonto(Number(c.presupuestoMensual), moneda)}`)
                 : null),
             ui.el('div', { class: 'acciones' },
               ui.el('button', { class: 'btn-icono', 'aria-label': 'Editar', onClick: () => modalCategoria(c) }, ui.icon('editar')),
               ui.el('button', { class: 'btn-icono', 'aria-label': 'Eliminar', onClick: async () => {
                 const usos = await db.getBy('transacciones', 'categoria', c.id);
                 const extra = usos.length ? ` Hay ${usos.length} movimiento(s) que quedarán como "Sin categoría".` : '';
-                if (!(await ui.confirmar(`¿Eliminar la categoría "${c.nombre}"?${extra}`))) return;
+                const ok = await ui.confirmar(`¿Eliminar la categoría "${c.nombre}"?${extra}`);
+                if (ok !== true) return;
                 await db.del('categoriasEco', c.id);
                 huboCambios = true;
                 ui.toast('Categoría eliminada');
@@ -658,40 +850,45 @@ async function render(cont) {
     // Alta/edición de una categoría
     const modalCategoria = (c) => {
       const inNombre = ui.campo({ tipo: 'text', etiqueta: 'Nombre', valor: c ? c.nombre : '' });
-      const selTipo = ui.campo({ tipo: 'select', etiqueta: 'Tipo', valor: c ? c.tipo : 'gasto', opciones: [
+      const selTipo = ui.campo({ tipo: 'select', etiqueta: 'Tipo', valor: c ? tipoDe(c) : 'gasto', opciones: [
         { v: 'gasto', t: 'Gasto' }, { v: 'ingreso', t: 'Ingreso' }] });
       const inColor = ui.campo({ tipo: 'color', etiqueta: 'Color', valor: c ? c.color : '#4f8ef7' });
-      const inPres = ui.campo({ tipo: 'text', etiqueta: 'Presupuesto mensual (opcional, solo gastos)', valor: c && c.presupuestoMensual ? c.presupuestoMensual : '', inputmode: 'decimal', placeholder: 'Sin presupuesto' });
+      const inPres = ui.campo({ tipo: 'text', etiqueta: 'Presupuesto mensual (opcional, solo gastos)', valor: c && c.presupuestoMensual ? c.presupuestoMensual : '', inputmode: 'decimal', placeholder: 'Sin presupuesto', autocomplete: 'off' });
       const togglePres = () => inPres.classList.toggle('oculto', selTipo.input.value !== 'gasto');
       selTipo.input.addEventListener('change', togglePres);
       togglePres();
-      ui.modal({
+      let cerrarModal = null;
+      const guardar = async () => {
+        const nombre = inNombre.input.value.trim();
+        if (!nombre) return ui.toast('La categoría necesita un nombre', 'error');
+        const tipo = selTipo.input.value;
+        let pres = null;
+        if (tipo === 'gasto' && inPres.input.value.trim()) {
+          pres = parseMonto(inPres.input.value);
+          if (isNaN(pres) || pres <= 0) return ui.toast('Presupuesto inválido: dejalo vacío o poné un monto mayor a cero', 'error', 3500);
+        }
+        await db.put('categoriasEco', {
+          ...(c || {}),
+          nombre, tipo,
+          color: inColor.input.value,
+          presupuestoMensual: pres,
+        });
+        huboCambios = true;
+        ui.toast(c ? 'Categoría actualizada' : 'Categoría creada');
+        if (cerrarModal) cerrarModal();
+        pintar();
+      };
+      inNombre.input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardar(); } });
+      const mo = ui.modal({
         titulo: c ? 'Editar categoría' : 'Nueva categoría',
         cuerpo: ui.el('div', {}, inNombre, ui.el('div', { class: 'fila-campos' }, selTipo, inColor), inPres),
         botones: [
           { texto: 'Cancelar', clase: 'btn-sec' },
-          { texto: 'Guardar', clase: 'btn-primario', onClick: async (cerrar) => {
-            const nombre = inNombre.input.value.trim();
-            if (!nombre) return ui.toast('La categoría necesita un nombre', 'error');
-            const tipo = selTipo.input.value;
-            let pres = null;
-            if (tipo === 'gasto' && inPres.input.value.trim()) {
-              pres = parseMonto(inPres.input.value);
-              if (isNaN(pres) || pres <= 0) return ui.toast('Presupuesto inválido: dejalo vacío o poné un monto mayor a cero', 'error', 3500);
-            }
-            await db.put('categoriasEco', {
-              ...(c || {}),
-              nombre, tipo,
-              color: inColor.input.value,
-              presupuestoMensual: pres,
-            });
-            huboCambios = true;
-            ui.toast(c ? 'Categoría actualizada' : 'Categoría creada');
-            cerrar();
-            pintar();
-          } },
+          { texto: 'Guardar', clase: 'btn-primario', onClick: () => guardar() },
         ],
       });
+      cerrarModal = mo.cerrar;
+      ui.alPintar(() => inNombre.input.focus());
     };
 
     await pintar();

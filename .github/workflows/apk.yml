@@ -13,6 +13,9 @@ on:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    # Hace falta para publicar el APK como release descargable.
+    permissions:
+      contents: write
     steps:
       - name: Bajar el código
         uses: actions/checkout@v4
@@ -82,3 +85,23 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 90
           if-no-files-found: error
+
+      # Los artefactos de Actions vienen en .zip y solo se bajan con sesión iniciada en
+      # GitHub, algo incómodo desde el celular. El release deja el .apk suelto en una
+      # dirección fija y pública:
+      #   https://github.com/agusgrosso81/lifetime-game/releases/latest/download/lifetime-game.apk
+      - name: Publicar el APK para bajar desde el celular
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk lifetime-game.apk
+          gh release delete apk-latest --yes --cleanup-tag || true
+          sleep 3
+          gh release create apk-latest lifetime-game.apk \
+            --title "Lifetime Game — última versión" \
+            --notes "APK de depuración, compilado automáticamente desde la rama main (commit ${GITHUB_SHA::7}).
+
+          **Para instalarlo:** abrí este enlace desde el celular y tocá \`lifetime-game.apk\`.
+          Android va a pedirte permiso para instalar apps de esta fuente: aceptalo.
+
+          Si ya tenías la app instalada, esto la actualiza y **respeta tus datos**."

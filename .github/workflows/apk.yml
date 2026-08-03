@@ -17,10 +17,12 @@ jobs:
       - name: Bajar el código
         uses: actions/checkout@v4
 
+      # Capacitor 8 declara engines node >= 22. Con Node 20, "cap add android" corta
+      # con exit 1 y el build muere ahí.
       - name: Preparar Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - name: Preparar Java
@@ -31,6 +33,14 @@ jobs:
 
       - name: Preparar el SDK de Android
         uses: android-actions/setup-android@v3
+
+      # Si algo vuelve a fallar, estas versiones son lo primero que hay que mirar.
+      - name: Versiones
+        run: |
+          echo "node    $(node --version)"
+          echo "npm     $(npm --version)"
+          echo "java    $(java -version 2>&1 | head -1)"
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
       - name: Instalar dependencias
         run: npm install

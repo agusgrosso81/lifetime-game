@@ -16,11 +16,16 @@ Se dispara solo cada vez que subís cambios a `main`. Para hacerlo a mano:
 
 ## Bajarlo
 
-1. En **Actions**, entrá a la ejecución que terminó (tilde verde).
-2. Abajo de todo, en **Artifacts**, bajá **lifetime-game-apk**.
-3. Es un `.zip`. Descomprimilo: adentro está `app-debug.apk`.
+La forma fácil, directo desde el celular:
 
-Pasalo al celular por cable, Drive, Telegram o como te quede cómodo.
+**https://github.com/agusgrosso81/lifetime-game/releases/latest/download/lifetime-game.apk**
+
+Ese enlace siempre apunta a la última versión compilada. No hace falta iniciar sesión ni
+descomprimir nada: se baja el `.apk` y lo abrís.
+
+También queda una copia en **Actions → la ejecución que terminó → Artifacts →
+lifetime-game-apk**, pero ese viene en `.zip` y pide sesión iniciada en GitHub, así que
+sirve más desde la computadora.
 
 ## Instalarlo en el POCO X7 Pro
 
